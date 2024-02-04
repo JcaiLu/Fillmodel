@@ -1,6 +1,7 @@
-import numpy as np
-import matplotlib.pyplot as plt
 from math import sqrt
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 length = 1  # in mm; Höhendimension x |
 width = 0.5  # in mm; Breitendimension y -
@@ -47,8 +48,10 @@ def ausbreitung(array, sz1, sz2, abs_a, abs_b, threshold):
 # Main simulation loop
 # 1. Set the boundary condition
 Wetting_boundary[-1, :] = 1
+
 # 2. set for the first time step
 Wetting_last[:,:] = Wetting_boundary[:,:]
+
 # 3. run the main loop
 for i in range(1, wetting_time_steps):
     # 3.1 calculate the time-dependen parameter
