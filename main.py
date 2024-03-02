@@ -20,7 +20,6 @@ width_mesh_steps = int(width / mesh_incr) + 1
 wetting_time_steps = int(wetting_time / time_incr)
 
 # Initialize Wetting array
-
 Wetting_last = np.zeros((length_mesh_steps, width_mesh_steps))
 Wetting_new = np.zeros((length_mesh_steps, width_mesh_steps))
 Wetting_sum = np.zeros(wetting_time_steps)
@@ -81,7 +80,6 @@ for i in range(1, wetting_time_steps):
     if i % 100 == 0:
         plt.cla()
         plt.imshow(Wetting_last[:, :], cmap='gray')
-        plt.show()
         plt.pause(0.1)
     if i % 10 == 0:
         print("Wetting Prozess .......", i / wetting_time_steps * 100, "%")
