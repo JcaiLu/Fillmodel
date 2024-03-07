@@ -1,19 +1,25 @@
 from math import sqrt
-
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
-length = 1  # in mm; Höhendimension x |
-width = 0.5  # in mm; Breitendimension y -
+# Input Parameter of user
+length = 10  # in mm; Höhendimension x |
+width = 5  # in mm; Breitendimension y -
 thickness = 2  # in mm
 wetting_time = 200  # in s
+
+# Parameter of system
 mesh_incr = 0.02  # in mm/lu
 k_equal = 0.05  # mm/s^0.5
 time_incr = 0.02  # in s/tu
 k_trans_max = 0.01  # in %
 threshold = 1  # in %
 time_incr_max = 2 * k_equal * mesh_incr  # in s/tu
+init_Boundary_Condition = 2 # 1: Wetting only from bottom; 2: Wetting from each side
+Wetting_sum_threshold = 1
 
+# 内置函数math.ceil() 来向上取整
 # Grid setup
 length_mesh_steps = int(length / mesh_incr) + 1
 width_mesh_steps = int(width / mesh_incr) + 1
@@ -28,10 +34,10 @@ Wetting_sum = np.zeros(wetting_time_steps)
 Wetting_boundary = np.zeros((length_mesh_steps, width_mesh_steps))
 
 neighbors = [
-            (-1, -1), (0, -1), (1, -1),
-            (-1, 0), (1, 0),
-            (-1, 1), (0, 1), (1, 1)
-    ]
+    (-1, -1), (0, -1), (1, -1),
+    (-1, 0), (1, 0),
+    (-1, 1), (0, 1), (1, 1)
+]
 
 def ausbreitung(array, sz1, sz2, abs_a, abs_b, threshold):
     _array = array[sz1, sz2]
@@ -44,15 +50,29 @@ def ausbreitung(array, sz1, sz2, abs_a, abs_b, threshold):
                 _array += array[new_sz1, new_sz2] * abs_coeff
     return _array
 
+
 # Main simulation loop
 # 1. Set the boundary condition
-Wetting_boundary[-1, :] = 1
+if init_Boundary_Condition == 1:
+    Wetting_boundary[-1, :] = 1
+elif init_Boundary_Condition == 2:
+    Wetting_boundary[-1, :] = 1
+    Wetting_boundary[0, :] = 1
+    Wetting_boundary[:, -1] = 1
+    Wetting_boundary[:, 0] = 1
 
 # 2. set for the first time step
-Wetting_last[:,:] = Wetting_boundary[:,:]
+Wetting_last[:, :] = Wetting_boundary[:, :]
 
+###########################
+#Time Test
+##########################
 # 3. run the main loop
 for i in range(1, wetting_time_steps):
+    ###########################
+    # Time Test
+    T1 = time.time()
+    ##########################
     # 3.1 calculate the time-dependen parameter
     Act_time_Step = time_incr * i  # in ms
     k_trans_new = 0.5 * k_equal * (time_incr / mesh_incr) * (1 / sqrt(time_incr * i))
@@ -60,8 +80,8 @@ for i in range(1, wetting_time_steps):
     abs_b = (1 / (sqrt(2) * (1 + sqrt(2)))) * k_trans_new
 
     # 3.2 calculate the new value of the array
-    for j in range(0,length_mesh_steps ):
-        for k in range(0,width_mesh_steps ):
+    for j in range(0, length_mesh_steps):
+        for k in range(0, width_mesh_steps):
             if Wetting_last[j, k] < 1:
                 Wetting_new[j, k] = ausbreitung(Wetting_last, j, k, abs_a, abs_b, threshold)
                 if Wetting_new[j, k] > 1:
@@ -75,14 +95,26 @@ for i in range(1, wetting_time_steps):
 
     # 3.4 calculate the sum of the Matrix
     Wetting_sum[i] = np.sum(Wetting_new)
-
+    if Wetting_sum[i] - Wetting_sum[i-1] < Wetting_sum_threshold:
+        break
     # 3.5 Displaying the wetting process
-    if i % 100 == 0:
+    if i % 10 == 0:
         plt.cla()
         plt.imshow(Wetting_last[:, :], cmap='gray')
         plt.pause(0.1)
-    if i % 10 == 0:
+    if i % 100 == 0:
         print("Wetting Prozess .......", i / wetting_time_steps * 100, "%")
+
+    ###########################
+    # Time Test
+    T2 = time.time()
+    print("Time for " , i, "st loop needs", T2 - T1, "seconds")
+    ##########################
+
+plt.close()
+
+# Main loop end
+#############################################################################
 
 # 4. Analysis and plotting
 x = np.arange(wetting_time_steps) * time_incr
@@ -93,8 +125,9 @@ E = C - B
 Grad_B = np.gradient(B, np.sqrt(x))
 Grad_C = np.gradient(C, np.sqrt(x))
 
-plt.figure()
+plt.figure('Benetzungskurve')
 plt.plot(x, B, x, C, x, E)
-plt.figure()
+plt.show()
+plt.figure('Plot')
 plt.plot(np.sqrt(x), B, np.sqrt(x), C, np.sqrt(x), Grad_B, np.sqrt(x), Grad_C)
 plt.show()
