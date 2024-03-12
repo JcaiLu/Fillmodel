@@ -2,22 +2,28 @@ from math import sqrt
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+from numba import jit
+import cv2
+
 
 # Input Parameter of user
 length = 10  # in mm; Höhendimension x |
 width = 5  # in mm; Breitendimension y -
 thickness = 2  # in mm
-wetting_time = 200  # in s
+wetting_time = 20  # in s
 
 # Parameter of system
 mesh_incr = 0.02  # in mm/lu
 k_equal = 0.05  # mm/s^0.5
-time_incr = 0.02  # in s/tu
+time_incr = 0.2  # in s/tu
 k_trans_max = 0.01  # in %
 threshold = 1  # in %
 time_incr_max = 2 * k_equal * mesh_incr  # in s/tu
-init_Boundary_Condition = 2 # 1: Wetting only from bottom; 2: Wetting from each side
+init_Boundary_Condition = 1  # 1: Wetting only from bottom; 2: Wetting from each side
 Wetting_sum_threshold = 1
+
+# parameter for output
+time_incr_eff = 0
 
 # 内置函数math.ceil() 来向上取整
 # Grid setup
@@ -33,14 +39,15 @@ Wetting_sum = np.zeros(wetting_time_steps)
 # Boundary conditions
 Wetting_boundary = np.zeros((length_mesh_steps, width_mesh_steps))
 
-neighbors = [
-    (-1, -1), (0, -1), (1, -1),
-    (-1, 0), (1, 0),
-    (-1, 1), (0, 1), (1, 1)
-]
-
+# use numba to celebrate the program
+@jit
 def ausbreitung(array, sz1, sz2, abs_a, abs_b, threshold):
     _array = array[sz1, sz2]
+    neighbors = [
+        (-1, -1), (0, -1), (1, -1),
+        (-1, 0), (1, 0),
+        (-1, 1), (0, 1), (1, 1)
+    ]
     for d1, d2 in neighbors:
         new_sz1 = sz1 + d1
         new_sz2 = sz2 + d2
@@ -65,7 +72,7 @@ elif init_Boundary_Condition == 2:
 Wetting_last[:, :] = Wetting_boundary[:, :]
 
 ###########################
-#Time Test
+# Time Test
 ##########################
 # 3. run the main loop
 for i in range(1, wetting_time_steps):
@@ -95,39 +102,56 @@ for i in range(1, wetting_time_steps):
 
     # 3.4 calculate the sum of the Matrix
     Wetting_sum[i] = np.sum(Wetting_new)
-    if Wetting_sum[i] - Wetting_sum[i-1] < Wetting_sum_threshold:
+    if Wetting_sum[i] - Wetting_sum[i - 1] < Wetting_sum_threshold:
+        time_incr_eff = i
         break
     # 3.5 Displaying the wetting process
+    if i % 50 == 0:
+        # use OpenCV
+        cv2.imshow("demo",Wetting_last)
+        cv2.resizeWindow("demo",[width*50, length*50])
+        cv2.waitKey(50)
+
+    # print information of loop
     if i % 10 == 0:
-        plt.cla()
-        plt.imshow(Wetting_last[:, :], cmap='gray')
-        plt.pause(0.1)
-    if i % 100 == 0:
-        print("Wetting Prozess .......", i / wetting_time_steps * 100, "%")
+        print("****************************************")
+        T2 = time.time()
+        print("Time for ", i, "st loop needs", '%.2f' % (T2 - T1), "seconds")
 
-    ###########################
-    # Time Test
-    T2 = time.time()
-    print("Time for " , i, "st loop needs", T2 - T1, "seconds")
-    ##########################
+        rate = Wetting_sum[i] / Wetting_new.shape[0] / Wetting_new.shape[1] * 100
+        print("Wetting Percent", '%.3f' % rate, "%")
 
-plt.close()
+        print("****************************************")
+
 
 # Main loop end
 #############################################################################
 
 # 4. Analysis and plotting
 x = np.arange(wetting_time_steps) * time_incr
-A = Wetting_sum
-B = A / Wetting_last.shape[0] / Wetting_last.shape[1]  # in %
-C = k_equal * np.sqrt(np.arange(wetting_time_steps) * time_incr) / length  # in %
-E = C - B
-Grad_B = np.gradient(B, np.sqrt(x))
-Grad_C = np.gradient(C, np.sqrt(x))
+rSumWetting = Wetting_sum
+rSumWettingRate = rSumWetting / Wetting_last.shape[0] / Wetting_last.shape[1]  # in %
+rTheorieSumWetting = k_equal * np.sqrt(np.arange(wetting_time_steps) * time_incr) / length  # in %
+rError = rTheorieSumWetting - rSumWettingRate
+Grad_B = np.gradient(rSumWettingRate, np.sqrt(x))
+Grad_C = np.gradient(rTheorieSumWetting, np.sqrt(x))
+
+x_plot = x[1:time_incr_eff]
+A_plot = rSumWetting[1:time_incr_eff]
+B_plot = rSumWettingRate[1:time_incr_eff]
+C_plot = rTheorieSumWetting[1:time_incr_eff]
+E_plot = rError[1:time_incr_eff]
+Grad_B_plot = Grad_B[1:time_incr_eff]
+Grad_C_plot = Grad_C[1:time_incr_eff]
 
 plt.figure('Benetzungskurve')
-plt.plot(x, B, x, C, x, E)
+plt.title('Benetzungskurve')
+plt.plot(x, rSumWettingRate, x, rTheorieSumWetting, x, rError)
+plt.legend(['Simulation', 'Theorie','Error'])
 plt.show()
-plt.figure('Plot')
-plt.plot(np.sqrt(x), B, np.sqrt(x), C, np.sqrt(x), Grad_B, np.sqrt(x), Grad_C)
+
+plt.figure('Gradient Benetzungskurve')
+plt.title('Gradient Benetzungskurve')
+plt.plot(np.sqrt(x), rSumWettingRate, np.sqrt(x), rTheorieSumWetting, np.sqrt(x), Grad_B, np.sqrt(x), Grad_C)
+plt.legend(['Simulation', 'Theorie','Error'])
 plt.show()
