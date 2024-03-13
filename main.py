@@ -12,6 +12,16 @@ width = 5  # in mm; Breitendimension y -
 thickness = 2  # in mm
 wetting_time = 20  # in s
 
+# Weiterer Input:
+# Dimensionen des Gehäuses für Berechnung des Totvolumens
+# Elektrolytmenge
+# Wartezeit zwischen den Befüllzeitpunkten
+
+# Weitere zu inplemtierende Features:
+# Zeitabhängige / Höhenabhängige Boundary_Conditions
+# Neue Ausbreitungsfunktion nach Fries / Günter (oder andere Modelle) anstelle der Washburn Gleichung einfügen
+# --> Ableitung des k-Values aus den Modellgrößen
+
 # Parameter of system
 mesh_incr = 0.02  # in mm/lu
 k_equal = 0.05  # mm/s^0.5
