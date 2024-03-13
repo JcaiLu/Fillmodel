@@ -24,7 +24,7 @@ Wetting_sum_threshold = 1
 
 # parameter for output
 time_incr_eff = 0
-
+time_incr_eff2 = 0
 # 内置函数math.ceil() 来向上取整
 # Grid setup
 length_mesh_steps = int(length / mesh_incr) + 1
