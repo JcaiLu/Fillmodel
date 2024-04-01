@@ -7,14 +7,14 @@ import cv2
 
 
 # Input Parameter of user
-length = 10  # in mm; Höhendimension x |
-width = 5  # in mm; Breitendimension y -
+length = 70  # in mm; Höhendimension x |
+width = 50  # in mm; Breitendimension y -
 thickness = 2  # in mm
 wetting_time = 20  # in s
 
 # Parameter of system
-mesh_incr = 0.02  # in mm/lu
-k_equal = 0.05  # mm/s^0.5
+mesh_incr = 0.2  # in mm/lu
+k_equal = 0.5  # mm/s^0.5
 time_incr = 0.2  # in s/tu
 k_trans_max = 0.01  # in %
 threshold = 1  # in %
