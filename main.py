@@ -12,6 +12,16 @@ width = 50  # in mm; Breitendimension y -
 thickness = 2  # in mm
 wetting_time = 20  # in s
 
+# Weiterer Input:
+# Dimensionen des Gehäuses für Berechnung des Totvolumens
+# Elektrolytmenge
+# Wartezeit zwischen den Befüllzeitpunkten
+
+# Weitere zu inplemtierende Features:
+# Zeitabhängige / Höhenabhängige Boundary_Conditions
+# Neue Ausbreitungsfunktion nach Fries / Günter (oder andere Modelle) anstelle der Washburn Gleichung einfügen
+# --> Ableitung des k-Values aus den Modellgrößen
+
 # Parameter of system
 mesh_incr = 0.2  # in mm/lu
 k_equal = 0.5  # mm/s^0.5
@@ -24,7 +34,7 @@ Wetting_sum_threshold = 1
 
 # parameter for output
 time_incr_eff = 0
-
+time_incr_eff2 = 0
 # 内置函数math.ceil() 来向上取整
 # Grid setup
 length_mesh_steps = int(length / mesh_incr) + 1
