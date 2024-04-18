@@ -1,3 +1,4 @@
+import os
 import sys
 from math import sqrt
 import matplotlib.pyplot as plt
@@ -7,52 +8,85 @@ import cv2
 import torch
 from torch import nn
 import math
+import datetime
+import re
 
 # Input Parameter of user
 # Elektroltyt
-OS = 0  # Oberflächenspannung ---mN/m
-vi = 2.5 * 1e-6  # Viskosität ---Pa.s
-di = 0  # Dichte---kg/m^3----g/mm^3
-al = 0  # Druckkoeffizient----10^-3/bar
-tha = 0  # Kontaktwinkel_Anode---grad
-ths = 0  # Kontaktwinkel_Separator---grad
-thk = 0  # Kontaktwinkel_Kathode---grad
-
+OS = 0.034 * 1000  # Oberflächenspannung ---mN/m
+di = 1.3  # Dichte---kg/m^3
+Vi = 2.5 * di  # Viskosität ---mPa.s
+al = 2.0 * 0.001  # Druckkoeffizient----10^-3/bar
+tha = 0.8182232853354976 * 180 / np.pi  # Kontaktwinkel_Anode---grad
+ths = 0.96 * 180 / np.pi  # Kontaktwinkel_Separator---grad
+thk = 1.0884720504995502 * 180 / np.pi  # Kontaktwinkel_Kathode---grad
+qElektrolyte = 0.0 # Volumen der Elektroltyt---ml
 # Anode
-ba = 70 * 1e-3  # Breite des Zellkörpers---m
-ha = 50 * 1e-3  # Höhe des Zellkörpers--- m
-da = 2 * 1e-6  # Dicke----m
-tw = 10  # Zeit der Benetzung--- s
+ba = 70 * 1e-3  # Breite des Zellkörpers---mm
+ha = 50 * 1e-3   # Höhe des Zellkörpers--- mm
+da = 2    # Dicke----mm
+tw = 1  # Zeit der Benetzung--- s
+ra = 1.57  #Effektiver Porenradius ----mm
+
 
 # Befüllungsmethode
-P = 0.1    #Druck ---bar
+P = 0.1  # Druck ---bar
 Pa = 0.08  # Anfangsdruck----bar
 
 # Parameter of system/Simulation
-l_incr = 0.01  # in mm/lu
-t_incr = 0.01  # in s/tu
-k_equal = 0  # mm/s^0.5
+l_incr = 0.0001  # in mm/lu
+t_incr = 0.001  # in s/tu
+k_equal = 0.5  # mm/s^0.5
 k_trans_max = 0.01  # in %
 threshold = 0.1  # in %
 time_incr_max = 2 * k_equal * l_incr  # in s/tu
-init_Boundary_Condition = 2  # 1: Wetting only from bottom; 2: Wetting from each side
-wetting_sum_threshold = 1
+init_Boundary_Condition = 1  # 1: Wetting only from bottom; 2: Wetting from each side
+wetting_sum_threshold = 10
 
+# Parameter for video
+theTime = str(datetime.datetime.now().strftime('%m-%d %H:%M,f'))
+videoname = re.sub(u"([^\u0030-\u0039])", "", theTime)
+video_dir = 'G:/video/' + videoname + '.avi'
+
+if not os.path.exists(video_dir):
+    print('check the output path of videos')
+fps = 30
+num = 0
+img_size = (500,700)
+fourcc = cv2.VideoWriter_fourcc(*'mp4v') #opencv3.0
+videoWriter = cv2.VideoWriter(video_dir, fourcc, fps, img_size)
 
 # Theoretische Bewegungsgeschwindigkeit
-def k_operation(r, th):  # K-Wert
-    vip = vi * math.exp(al * (P - Pa))  # Viskositätsänderungen durch Druck
-    k = (OS * r * math.cos(th / 180 * math.pi) / (2 * vip)) ** 0.5  # mm/s^0.5
+def k_operation(r, th):  # K-Wert g/s^0.5
+    Vip = Vi * math.exp(al * (P - Pa))  # Viskositätsänderungen durch Druck
+    k = (OS * r * math.cos(th / 180 * math.pi) / (2 * Vip)) ** 0.5  # mm/s^0.5
     return k
 
-k_equal = k_operation(0, tha)
+def ResizeWithAspectRatio(image, width=None, height=None, inter=cv2.INTER_AREA):
+    dim = None
+    (h, w) = image.shape[:2]
+
+    if width is None and height is None:
+        return image
+    if width is None:
+        r = height / float(h)
+        dim = (int(w * r), height)
+    else:
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    return cv2.resize(image, dim, interpolation=inter)
+
+k_equal = k_operation(ra, tha)
 # parameter for output
-time_incr_eff = 0
+time_incr_eff = 0.0
+rate = 0.0
 
 # Grid setup
 length_mesh_steps = int(ba / l_incr) + 1
 width_mesh_steps = int(ha / l_incr) + 1
 time_steps = int(tw / t_incr)
+time_steps_real = 0
 
 wetting_last = torch.zeros([length_mesh_steps, width_mesh_steps], dtype=torch.float)
 wetting_new = torch.zeros([length_mesh_steps, width_mesh_steps], dtype=torch.float)
@@ -117,7 +151,9 @@ for i in range(1, time_steps):
         wetting_show_cv = wetting_show.detach().numpy()
         cv2.namedWindow('demo', cv2.WINDOW_NORMAL)
         cv2.imshow("demo", wetting_show_cv)
+        cv2.resizeWindow("demo", 500, 500)
         cv2.waitKey(50)
+        videoWriter.write(wetting_show_cv)
     # print information of loop
     if i % 1 == 0:
         print("****************************************")
@@ -127,39 +163,46 @@ for i in range(1, time_steps):
         print("Wetting Percent", '%.3f' % rate, "%")
         print("****************************************")
     # 3.6 wetting process end
-    if wetting_sum[i] - wetting_sum[i - 1] < wetting_sum_threshold | i == time_steps - 1:
-        time_incr_eff = i
+    time_steps_real = i
+    if rate >= 100:
         break
 
 # Main loop end
 #############################################################################
 
-# 4. Analysis and plotting
-# x = np.arange(wetting_time_steps) * time_incr
-# rSumWetting = wetting_sum
-# rSumWettingRate = rSumWetting / wetting_last.shape[0] / wetting_last.shape[1]  # in %
-# rTheorieSumWetting = k_equal * np.sqrt(np.arange(wetting_time_steps) * time_incr) / length  # in %
-# rError = rTheorieSumWetting - rSumWettingRate
-# Grad_B = np.gradient(rSumWettingRate, np.sqrt(x))
-# Grad_C = np.gradient(rTheorieSumWetting, np.sqrt(x))
-#
-# x_plot = x[1:time_incr_eff]
-# A_plot = rSumWetting[1:time_incr_eff]
-# B_plot = rSumWettingRate[1:time_incr_eff]
-# C_plot = rTheorieSumWetting[1:time_incr_eff]
-# E_plot = rError[1:time_incr_eff]
-# Grad_B_plot = Grad_B[1:time_incr_eff]
-# Grad_C_plot = Grad_C[1:time_incr_eff]
-#
-# plt.figure('Benetzungskurve')
-# plt.title('Benetzungskurve')
-# plt.plot(x, rSumWettingRate, x, rTheorieSumWetting, x, rError)
-# plt.legend(['Simulation', 'Theorie','Error'])
-# plt.show()
-#
-# plt.figure('Gradient Benetzungskurve')
-# plt.title('Gradient Benetzungskurve')
-# plt.plot(np.sqrt(x), rSumWettingRate, np.sqrt(x), rTheorieSumWetting, np.sqrt(x), Grad_B, np.sqrt(x), Grad_C)
-# plt.legend(['Simulation', 'Theorie','Error'])
-# plt.show()
+# 4. Analysis and plotting# 4. Analysis and plotting
+x = np.arange(time_steps_real) * t_incr
+rSumWetting = wetting_sum
+rSumWettingRate = rSumWetting / wetting_last.shape[2] / wetting_last.shape[3]  # in %
+rTheorieSumWetting = k_equal * np.sqrt(np.arange(time_steps) * t_incr) / ha  # in %
+print(type(rSumWettingRate))
+rSumWettingRate_numpy = rSumWettingRate.detach().numpy()
+rError = rTheorieSumWetting - rSumWettingRate_numpy
+
+# if time_steps > time_steps_real:
+t = time_steps_real
+# elif time_steps > rSumWettingRate_numpy.length():
+#     t = rSumWettingRate_numpy.length()
+
+Grad_B = np.gradient(rSumWettingRate_numpy[0:t], np.sqrt(x))
+Grad_C = np.gradient(rTheorieSumWetting[0:t], np.sqrt(x))
+
+x_plot = x[0:t]
+A_plot = rSumWetting[0:t]
+B_plot = rSumWettingRate[0:t]
+C_plot = rTheorieSumWetting[0:t]
+E_plot = abs(rError[0:t])
+
+plt.figure('Benetzungskurve')
+plt.title('Benetzungskurve')
+plt.plot(x_plot, rSumWettingRate_numpy[0:t], x_plot, rTheorieSumWetting[0:t], x_plot, rError[0:t])
+plt.legend(['Simulation', 'Theorie', 'Error'])
+plt.show()
+
+plt.figure('Gradient Benetzungskurve')
+plt.title('Gradient Benetzungskurve')
+plt.plot(np.sqrt(x), rSumWettingRate_numpy[0:t], np.sqrt(x), rTheorieSumWetting[0:t], np.sqrt(x), Grad_B[0:t],np.sqrt(x), Grad_C[0:t])
+plt.legend(['Simulation', 'Theorie', 'Grad_Simulation', 'Grad_Theorie'])
+plt.show()
+videoWriter.release()
 sys.exit()
